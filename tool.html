@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mc | 图床管理</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2233; --card2:#232d42; --line:#2e3a52;
+    --txt:#e8ecf3; --sub:#9aa7bd; --pri:#4f8cff; --pri2:#3b6fd6;
+    --ok:#31c48d; --err:#f0616d; --warn:#f0b429; --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;padding:16px}
+  .wrap{max-width:1200px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+  header h1{font-size:20px;font-weight:700}
+  header h1 small{color:var(--sub);font-weight:400;font-size:13px;margin-left:8px}
+  .badge{font-size:12px;color:var(--sub);background:var(--card);border:1px solid var(--line);
+    padding:4px 10px;border-radius:20px}
+
+  .box{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+  .box h2{font-size:14px;color:var(--sub);margin-bottom:12px;font-weight:600;letter-spacing:.5px}
+
+  .token-row{display:flex;gap:8px;flex-wrap:wrap}
+  .token-row input{flex:1;min-width:220px}
+  input[type=text],input[type=password]{
+    background:var(--card2);border:1px solid var(--line);color:var(--txt);
+    padding:10px 12px;border-radius:9px;font-size:14px;outline:none
+  }
+  input:focus{border-color:var(--pri)}
+  button{cursor:pointer;border:none;border-radius:9px;font-size:13px;padding:9px 14px;transition:.15s}
+  button:active{transform:translateY(1px)}
+  .btn{background:var(--pri);color:#fff;font-weight:600}
+  .btn:hover{background:var(--pri2)}
+  .btn-ghost{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+  .btn-ghost:hover{border-color:var(--pri)}
+  .btn-danger{background:transparent;color:var(--err);border:1px solid var(--line)}
+  .btn-danger:hover{background:var(--err);color:#fff}
+  .btn-sm{padding:5px 10px;font-size:12px}
+
+  #drop{
+    border:2px dashed var(--line);border-radius:var(--radius);padding:36px 16px;
+    text-align:center;color:var(--sub);cursor:pointer;transition:.15s
+  }
+  #drop.hover{border-color:var(--pri);background:rgba(79,140,255,.08);color:var(--txt)}
+  #drop .ico{font-size:38px;margin-bottom:8px}
+  #drop b{color:var(--txt)}
+  .hint{font-size:12px;color:var(--sub);margin-top:10px}
+
+  .uploads{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .up-item{display:flex;align-items:center;gap:10px;background:var(--card2);
+    border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
+  .up-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .up-item .st{font-size:12px;min-width:54px;text-align:right}
+  .st.ok{color:var(--ok)} .st.err{color:var(--err)} .st.doing{color:var(--warn)}
+  progress{width:120px;height:8px;border-radius:4px;overflow:hidden;accent-color:var(--pri)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;display:flex;flex-direction:column}
+  .thumb{background:var(--card2);aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;position:relative}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .ext{font-size:26px;font-weight:700;color:var(--sub)}
+  .thumb audio{width:90%;height:36px}
+  .card .body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .card .fname{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card input{font-size:12px;padding:7px 9px}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .actions button{flex:1;min-width:0}
+  .empty{color:var(--sub);text-align:center;padding:40px 0;font-size:14px;grid-column:1/-1}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card2);
+    border:1px solid var(--line);color:var(--txt);padding:10px 18px;border-radius:24px;font-size:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transition:.25s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
+  .toast.err{border-color:var(--err);color:#ffd7db}
+  .toast.ok{border-color:var(--ok);color:#cffce8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🖼️ mc 图床 <small>GitHub Pages 文件管理</small></h1>
+    <span class="badge" id="repoBadge">larsss1019/mc · main</span>
+  </header>
+
+  <!-- Token 设置 -->
+  <div class="box">
+    <h2>🔑 GITHUB TOKEN 设置</h2>
+    <div class="token-row">
+      <input type="password" id="tokenInput" placeholder="粘贴 GitHub Personal Access Token（repo 权限）">
+      <button class="btn" id="saveToken">保存</button>
+      <button class="btn-ghost" id="clearToken">清除</button>
+    </div>
+    <div class="hint">Token 仅保存在本浏览器 localStorage 中，不会上传到任何服务器。建议使用仅含 <b>repo</b> 权限的 Fine-grained PAT。</div>
+  </div>
+
+  <!-- 上传区 -->
+  <div class="box">
+    <h2>⬆️ 上传文件</h2>
+    <div id="drop">
+      <div class="ico">📥</div>
+      <div><b>点击选择</b> 或拖拽文件到此处</div>
+      <div class="hint">支持多选 · 图片: jpg/png/gif/webp/svg/bmp/ico · 音频: mp3/m4a/ogg/flac/aac</div>
+    </div>
+    <input type="file" id="fileInput" multiple style="display:none">
+    <div class="uploads" id="uploads"></div>
+  </div>
+
+  <!-- 图库 -->
+  <div class="box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">🗂️ 图库</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost btn-sm" id="refresh">🔄 刷新列表</button>
+      </div>
+    </div>
+    <div class="grid" id="gallery"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ 配置 ============ */
+const OWNER = "larsss1019";
+const REPO  = "mc";
+const BRANCH= "main";
+const RAW   = `https://larsss1019.github.io/mc/`;
+const API   = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
+
+const IMG_EXT = ["jpg","jpeg","png","gif","webp","svg","bmp","ico"];
+const AUD_EXT = ["mp3","m4a","ogg","flac","aac"];
+const ALLOWED = [...IMG_EXT, ...AUD_EXT];
+
+/* ============ 工具 ============ */
+const $ = id => document.getElementById(id);
+const toast = (msg, type="") => {
+  const t = $("toast"); t.textContent = msg; t.className = `toast show ${type}`;
+  clearTimeout(t._t); t._t = setTimeout(()=>t.className=`toast ${type}`, 2200);
+};
+const getToken = () => localStorage.getItem("gh_token") || "";
+const headers  = () => ({
+  "Authorization": `Bearer ${getToken()}`,
+  "Accept": "application/vnd.github+json",
+  "Content-Type": "application/json",
+});
+const extOf = name => (name.split(".").pop()||"").toLowerCase();
+const isImage = n => IMG_EXT.includes(extOf(n));
+const isAudio = n => AUD_EXT.includes(extOf(n));
+
+/* ============ Token ============ */
+$("saveToken").onclick = () => {
+  const v = $("tokenInput").value.trim();
+  if(!v) return toast("请输入 Token", "err");
+  localStorage.setItem("gh_token", v);
+  $("tokenInput").value = v;
+  toast("Token 已保存 ✔", "ok");
+};
+$("clearToken").onclick = () => {
+  localStorage.removeItem("gh_token");
+  $("tokenInput").value = "";
+  toast("已清除 Token");
+};
+window.addEventListener("load", () => { $("tokenInput").value = getToken(); });
+
+/* ============ 文件选择 / 拖拽 ============ */
+$("drop").onclick = () => $("fileInput").click();
+$("fileInput").onchange = e => { handleFiles(e.target.files); e.target.value=""; };
+["dragover","dragenter"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("hover");}));
+["dragleave","drop"].forEach(ev=>$("drop").addEventListener(ev,e=>{$("drop").classList.remove("hover");}));
+$("drop").addEventListener("drop", e=>{e.preventDefault();handleFiles(e.dataTransfer.files);});
+
+function handleFiles(fileList){
+  if(!getToken()) return toast("请先填写并保存 Token", "err");
+  const files = [...fileList];
+  const ok = files.filter(f => {
+    if(!ALLOWED.includes(extOf(f.name))){
+      toast(`跳过不支持的文件: ${f.name}`, "err"); return false;
+    } return true;
+  });
+  ok.forEach(uploadFile);
+}
+
+/* ============ 上传 (PUT /contents/文件名) ============ */
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>{
+      // data:<mime>;base64,XXXX
+      const b64 = r.result.split(",")[1];
+      res(b64);
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function uploadFile(file){
+  const name = encodeURIComponent(file.name); // 保留中文等
+  const node = addUploadRow(file.name);
+  try{
+    const content = await fileToBase64(file);
+    node.st.textContent = "上传中"; node.st.className = "st doing";
+    // GitHub API 单次建议 <100MB，此处 base64 上传
+    const resp = await fetch(API + file.name, {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify({
+        message: `upload: ${file.name}`,
+        branch: BRANCH,
+        content: content,
+      }),
+    });
+    if(!resp.ok){
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.message || `HTTP ${resp.status}`);
+    }
+    await resp.json();
+    node.st.textContent = "成功"; node.st.className = "st ok";
+    toast(`上传成功: ${file.name}`, "ok");
+    setTimeout(loadGallery, 1500); // 等待 GitHub Pages 构建
+  }catch(err){
+    node.st.textContent = "失败"; node.st.className = "st err";
+    toast(`上传失败 ${file.name}: ${err.message}`, "err");
+    console.error(err);
+  }
+}
+
+function addUploadRow(name){
+  const wrap = $("uploads");
+  const row = document.createElement("div");
+  row.className = "up-item";
+  row.innerHTML = `<span class="name">${name}</span><progress max="1" value="1"></progress><span class="st doing">准备</span>`;
+  wrap.prepend(row);
+  return { st: row.querySelector(".st") };
+}
+
+/* ============ 图库列表 ============ */
+let fileShaCache = {}; // 文件名 -> sha
+
+async function loadGallery(){
+  const gal = $("gallery");
+  gal.innerHTML = `<div class="empty">加载中…</div>`;
+  if(!getToken()){ gal.innerHTML = `<div class="empty">请先设置 Token 后再加载列表</div>`; return; }
+  try{
+    // 递归列出所有文件（仓库小，直接取根目录即可；含子目录可展开）
+    const resp = await fetch(API + "?ref=" + BRANCH, { headers: headers() });
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); throw new Error(e.message||resp.status); }
+    const items = await resp.json(); // array of {name, type, sha, ...}
+    fileShaCache = {};
+    const files = items.filter(it => it.type === "file" && ALLOWED.includes(extOf(it.name)));
+    files.forEach(f => fileShaCache[f.name] = f.sha);
+
+    if(files.length === 0){ gal.innerHTML = `<div class="empty">还没有文件，上传第一张图片吧 ✨</div>`; return; }
+
+    gal.innerHTML = "";
+    files.forEach(f => gal.appendChild(renderCard(f.name)));
+  }catch(err){
+    gal.innerHTML = `<div class="empty">加载失败: ${err.message}</div>`;
+    console.error(err);
+  }
+}
+
+function renderCard(name){
+  const url = RAW + encodeURIComponent(name);
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="thumb" id="thumb-${CSS.escape(name)}"></div>
+    <div class="body">
+      <div class="fname" title="${name}">${name}</div>
+      <input type="text" value="${url}" readonly>
+      <div class="actions">
+        <button class="btn btn-sm" data-act="copy">📋 复制</button>
+        <button class="btn-ghost btn-sm" data-act="open">🔗 打开</button>
+        <button class="btn-danger btn-sm" data-act="del">🗑 删除</button>
+      </div>
+    </div>`;
+  const thumb = card.querySelector(".thumb");
+  if(isImage(name)){
+    const img = document.createElement("img");
+    img.src = url; img.alt = name; img.loading = "lazy";
+    img.onerror = ()=>{ thumb.innerHTML = `<div class="ext">${extOf(name)}</div>`; };
+    thumb.appendChild(img);
+  } else if(isAudio(name)){
+    thumb.innerHTML = "";
+    const au = document.createElement("audio");
+    au.controls = true; au.src = url; au.preload = "metadata";
+    thumb.appendChild(au);
+  } else {
+    thumb.innerHTML = `<div class="ext">${extOf(name)}</div>`;
+  }
+
+  card.querySelector('[data-act=copy]').onclick = async ()=>{
+    try{ await navigator.clipboard.writeText(url); toast("链接已复制 ✔", "ok"); }
+    catch{ const i=card.querySelector('input'); i.select(); document.execCommand('copy'); toast("链接已复制 ✔","ok"); }
+  };
+  card.querySelector('[data-act=open]').onclick = ()=> window.open(url, "_blank");
+  card.querySelector('[data-act=del]').onclick = ()=> deleteFile(name);
+  return card;
+}
+
+/* ============ 删除 (DELETE /contents/文件名, 需 sha) ============ */
+async function deleteFile(name){
+  const sha = fileShaCache[name];
+  if(!sha){ toast("缺少文件 sha，请先刷新列表", "err"); return; }
+  if(!confirm(`确定删除「${name}」？此操作不可恢复。`)) return;
+  try{
+    const resp = await fetch(API + name, {
+      method: "DELETE",
+      headers: headers(),
+      body: JSON.stringify({
+        message: `delete: ${name}`,
+        branch: BRANCH,
+        sha: sha,
+      }),
+    });
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); throw new Error(e.message||resp.status); }
+    toast(`已删除: ${name}`, "ok");
+    delete fileShaCache[name];
+    setTimeout(loadGallery, 1500);
+  }catch(err){
+    toast(`删除失败: ${err.message}`, "err");
+    console.error(err);
+  }
+}
+
+/* ============ 初始化 ============ */
+$("refresh").onclick = loadGallery;
+loadGallery();
+</script>
+</body>
+</html>
